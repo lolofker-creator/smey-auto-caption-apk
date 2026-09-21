@@ -1,4 +1,4 @@
-package com.smeyautocaption
+package com.smey.autocaption
 
 import android.app.Activity
 import android.os.Bundle
