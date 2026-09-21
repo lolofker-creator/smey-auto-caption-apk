@@ -1,7 +1,8 @@
-package com.smey.autocaption
+package com.smeyautocaption
 
 import android.app.Activity
 import android.os.Bundle
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 
@@ -14,7 +15,9 @@ class MainActivity : Activity() {
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+
         webView.webViewClient = WebViewClient()
+        webView.webChromeClient = WebChromeClient()
 
         webView.loadUrl(
             "https://smey-auto-caption-vip.streamlit.app/"
