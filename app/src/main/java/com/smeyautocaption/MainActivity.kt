@@ -34,7 +34,6 @@ class MainActivity : Activity() {
             ): Boolean {
 
                 this@MainActivity.filePathCallback?.onReceiveValue(null)
-
                 this@MainActivity.filePathCallback = filePath
 
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -50,6 +49,7 @@ class MainActivity : Activity() {
 
         webView.loadUrl(
             "https://khmer-auto-caption-vip1.streamlit.app/"
+        )
 
         setContentView(webView)
     }
@@ -59,26 +59,18 @@ class MainActivity : Activity() {
         resultCode: Int,
         data: Intent?
     ) {
-        super.onActivityResult(
-            requestCode,
-            resultCode,
-            data
-        )
+        super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == 100) {
 
             val result: Array<Uri>? =
-                if (
-                    resultCode == RESULT_OK &&
-                    data?.data != null
-                ) {
+                if (resultCode == RESULT_OK && data?.data != null) {
                     arrayOf(data.data!!)
                 } else {
                     null
                 }
 
             filePathCallback?.onReceiveValue(result)
-
             filePathCallback = null
         }
     }
@@ -86,7 +78,6 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         filePathCallback?.onReceiveValue(null)
         filePathCallback = null
-
         super.onDestroy()
     }
 }
