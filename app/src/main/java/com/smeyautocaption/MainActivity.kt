@@ -49,8 +49,7 @@ class MainActivity : Activity() {
         }
 
         webView.loadUrl(
-            "https://smey-auto-caption-vip.streamlit.app/"
-        )
+            "https://khmer-auto-caption-vip1.streamlit.app/"
 
         setContentView(webView)
     }
