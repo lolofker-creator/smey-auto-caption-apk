@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
@@ -29,7 +30,17 @@ class MainActivity : Activity() {
         webView.settings.allowFileAccess = true
         webView.settings.allowContentAccess = true
 
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+
+            override fun onPageFinished(
+                view: WebView?,
+                url: String?
+            ) {
+                super.onPageFinished(view, url)
+
+                injectDownloadScript(webView)
+            }
+        }
 
         webView.addJavascriptInterface(
             DownloadBridge(),
@@ -47,7 +58,8 @@ class MainActivity : Activity() {
                 this@MainActivity.filePathCallback
                     ?.onReceiveValue(null)
 
-                this@MainActivity.filePathCallback = filePath
+                this@MainActivity.filePathCallback =
+                    filePath
 
                 val intent =
                     Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -55,7 +67,10 @@ class MainActivity : Activity() {
                         type = "video/*"
                     }
 
-                startActivityForResult(intent, 100)
+                startActivityForResult(
+                    intent,
+                    100
+                )
 
                 return true
             }
@@ -65,97 +80,127 @@ class MainActivity : Activity() {
             "https://khmer-auto-caption-vip1.streamlit.app/"
         )
 
-        webView.webViewClient = object : WebViewClient() {
-
-            override fun onPageFinished(
-                view: WebView?,
-                url: String?
-            ) {
-                super.onPageFinished(view, url)
-
-                val script = """
-                    javascript:(function() {
-                        if (window.smeyDownloadInstalled) return;
-                        window.smeyDownloadInstalled = true;
-
-                        document.addEventListener('click', function(e) {
-                            var el = e.target;
-
-                            while (el && el.tagName !== 'A') {
-                                el = el.parentElement;
-                            }
-
-                            if (!el) return;
-
-                            var href = el.href || '';
-
-                            if (
-                                href.startsWith('blob:') ||
-                                href.startsWith('data:')
-                            ) {
-                                e.preventDefault();
-
-                                fetch(href)
-                                    .then(function(r) {
-                                        return r.blob();
-                                    })
-                                    .then(function(blob) {
-                                        var reader = new FileReader();
-
-                                        reader.onloadend = function() {
-                                            var result =
-                                                reader.result || '';
-
-                                            var comma =
-                                                result.indexOf(',');
-
-                                            var base64 =
-                                                comma >= 0
-                                                ? result.substring(comma + 1)
-                                                : result;
-
-                                            AndroidDownload.saveFile(
-                                                base64,
-                                                'smey_auto_caption.mp4'
-                                            );
-                                        };
-
-                                        reader.readAsDataURL(blob);
-                                    });
-
-                                return false;
-                            }
-                        }, true);
-                    })();
-                """.trimIndent()
-
-                view?.evaluateJavascript(
-                    script,
-                    null
-                )
-            }
-        }
-
         setContentView(webView)
+    }
+
+    private fun injectDownloadScript(
+        webView: WebView
+    ) {
+
+        val script = """
+            (function() {
+
+                if (window.__smeyDownloadInstalled) {
+                    return;
+                }
+
+                window.__smeyDownloadInstalled = true;
+
+                document.addEventListener(
+                    'click',
+                    function(event) {
+
+                        var link =
+                            event.target.closest('a');
+
+                        if (!link) {
+                            return;
+                        }
+
+                        var href =
+                            link.href || '';
+
+                        var download =
+                            link.getAttribute('download');
+
+                        if (
+                            !download &&
+                            !href.startsWith('blob:') &&
+                            !href.startsWith('data:')
+                        ) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        fetch(href)
+                            .then(function(response) {
+                                return response.blob();
+                            })
+                            .then(function(blob) {
+
+                                var reader =
+                                    new FileReader();
+
+                                reader.onloadend =
+                                    function() {
+
+                                        var result =
+                                            reader.result;
+
+                                        var base64 =
+                                            result.split(',')[1];
+
+                                        var name =
+                                            download ||
+                                            'smey_auto_caption.mp4';
+
+                                        AndroidDownload
+                                            .saveBase64File(
+                                                name,
+                                                base64,
+                                                blob.type ||
+                                                'video/mp4'
+                                            );
+                                    };
+
+                                reader.readAsDataURL(blob);
+                            })
+                            .catch(function(error) {
+
+                                console.log(
+                                    'Download error:',
+                                    error
+                                );
+                            });
+
+                    },
+                    true
+                );
+
+            })();
+        """.trimIndent()
+
+        webView.evaluateJavascript(
+            script,
+            null
+        )
     }
 
     inner class DownloadBridge {
 
         @JavascriptInterface
-        fun saveFile(
+        fun saveBase64File(
+            fileName: String,
             base64: String,
-            fileName: String
+            mimeType: String
         ) {
+
             try {
 
-                val data =
+                val bytes =
                     Base64.decode(
                         base64,
                         Base64.DEFAULT
                     )
 
+                val resolver =
+                    contentResolver
+
                 val values =
                     ContentValues().apply {
+
                         put(
                             MediaStore.Downloads.DISPLAY_NAME,
                             fileName
@@ -163,16 +208,19 @@ class MainActivity : Activity() {
 
                         put(
                             MediaStore.Downloads.MIME_TYPE,
-                            "video/mp4"
+                            mimeType
                         )
 
-                        put(
-                            MediaStore.Downloads.RELATIVE_PATH,
-                            Environment.DIRECTORY_DOWNLOADS
-                        )
+                        if (Build.VERSION.SDK_INT >=
+                            Build.VERSION_CODES.Q
+                        ) {
+
+                            put(
+                                MediaStore.Downloads.RELATIVE_PATH,
+                                Environment.DIRECTORY_DOWNLOADS
+                            )
+                        }
                     }
-
-                val resolver = contentResolver
 
                 val uri =
                     resolver.insert(
@@ -182,14 +230,30 @@ class MainActivity : Activity() {
 
                 if (uri != null) {
 
-                    resolver.openOutputStream(uri).use { output ->
-                        output?.write(data)
+                    resolver.openOutputStream(
+                        uri
+                    )?.use { output ->
+
+                        output.write(bytes)
+                        output.flush()
                     }
 
                     runOnUiThread {
+
                         Toast.makeText(
                             this@MainActivity,
-                            "✅ វីដេអូរក្សាទុកក្នុង Downloads ហើយ",
+                            "✅ វីដេអូបានរក្សាទុកក្នុង Downloads",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+
+                } else {
+
+                    runOnUiThread {
+
+                        Toast.makeText(
+                            this@MainActivity,
+                            "❌ មិនអាចរក្សាទុកវីដេអូបាន",
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -198,9 +262,10 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
 
                 runOnUiThread {
+
                     Toast.makeText(
                         this@MainActivity,
-                        "❌ ទាញយកមិនបាន",
+                        "❌ Download មានបញ្ហា",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -213,6 +278,7 @@ class MainActivity : Activity() {
         resultCode: Int,
         data: Intent?
     ) {
+
         super.onActivityResult(
             requestCode,
             resultCode,
@@ -222,16 +288,23 @@ class MainActivity : Activity() {
         if (requestCode == 100) {
 
             val result: Array<Uri>? =
+
                 if (
                     resultCode == RESULT_OK &&
                     data?.data != null
                 ) {
-                    arrayOf(data.data!!)
+
+                    arrayOf(
+                        data.data!!
+                    )
+
                 } else {
+
                     null
                 }
 
-            filePathCallback?.onReceiveValue(result)
+            filePathCallback
+                ?.onReceiveValue(result)
 
             filePathCallback = null
         }
@@ -239,7 +312,9 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
 
-        filePathCallback?.onReceiveValue(null)
+        filePathCallback
+            ?.onReceiveValue(null)
+
         filePathCallback = null
 
         super.onDestroy()
