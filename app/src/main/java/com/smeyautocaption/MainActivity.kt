@@ -20,24 +20,30 @@ class MainActivity : Activity() {
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        webView.settings.allowFileAccess = true
+        webView.settings.allowContentAccess = true
 
         webView.webViewClient = WebViewClient()
 
         webView.webChromeClient = object : WebChromeClient() {
+
             override fun onShowFileChooser(
                 webView: WebView?,
                 filePath: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
 
-                filePathCallback?.onReceiveValue(null)
-                filePathCallback = filePath
+                this@MainActivity.filePathCallback?.onReceiveValue(null)
 
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                intent.addCategory(Intent.CATEGORY_OPENABLE)
-                intent.type = "video/*"
+                this@MainActivity.filePathCallback = filePath
+
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "video/*"
+                }
 
                 startActivityForResult(intent, 100)
+
                 return true
             }
         }
@@ -54,17 +60,34 @@ class MainActivity : Activity() {
         resultCode: Int,
         data: Intent?
     ) {
-        super.onActivityResult(requestCode, resultCode, data)
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data
+        )
 
         if (requestCode == 100) {
-            val result = if (resultCode == RESULT_OK && data?.data != null) {
-                arrayOf(data.data!!)
-            } else {
-                null
-            }
+
+            val result: Array<Uri>? =
+                if (
+                    resultCode == RESULT_OK &&
+                    data?.data != null
+                ) {
+                    arrayOf(data.data!!)
+                } else {
+                    null
+                }
 
             filePathCallback?.onReceiveValue(result)
+
             filePathCallback = null
         }
+    }
+
+    override fun onDestroy() {
+        filePathCallback?.onReceiveValue(null)
+        filePathCallback = null
+
+        super.onDestroy()
     }
 }
