@@ -9,7 +9,7 @@
         android:theme="@style/Theme.SmeyAutoCaption">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.smeyautocaption.MainActivity"
             android:exported="true">
 
             <intent-filter>
