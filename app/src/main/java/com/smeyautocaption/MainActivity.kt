@@ -1,13 +1,18 @@
 package com.smey.autocaption
 
 import android.app.Activity
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.DownloadListener
 
 class MainActivity : Activity() {
 
@@ -47,6 +52,56 @@ class MainActivity : Activity() {
             }
         }
 
+        webView.setDownloadListener(
+            DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+
+                val request = DownloadManager.Request(Uri.parse(url))
+
+                request.setMimeType(mimeType)
+
+                val cookies = CookieManager
+                    .getInstance()
+                    .getCookie(url)
+
+                if (cookies != null) {
+                    request.addRequestHeader(
+                        "Cookie",
+                        cookies
+                    )
+                }
+
+                request.addRequestHeader(
+                    "User-Agent",
+                    userAgent
+                )
+
+                request.setTitle(
+                    "Smey Auto Caption"
+                )
+
+                request.setDescription(
+                    "កំពុងទាញយកវីដេអូ..."
+                )
+
+                request.setNotificationVisibility(
+                    DownloadManager.Request
+                        .VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                )
+
+                request.setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_DOWNLOADS,
+                    "smey_auto_caption.mp4"
+                )
+
+                val manager =
+                    getSystemService(
+                        Context.DOWNLOAD_SERVICE
+                    ) as DownloadManager
+
+                manager.enqueue(request)
+            }
+        )
+
         webView.loadUrl(
             "https://khmer-auto-caption-vip1.streamlit.app/"
         )
@@ -59,12 +114,19 @@ class MainActivity : Activity() {
         resultCode: Int,
         data: Intent?
     ) {
-        super.onActivityResult(requestCode, resultCode, data)
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data
+        )
 
         if (requestCode == 100) {
 
             val result: Array<Uri>? =
-                if (resultCode == RESULT_OK && data?.data != null) {
+                if (
+                    resultCode == RESULT_OK &&
+                    data?.data != null
+                ) {
                     arrayOf(data.data!!)
                 } else {
                     null
@@ -78,6 +140,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         filePathCallback?.onReceiveValue(null)
         filePathCallback = null
+
         super.onDestroy()
     }
 }
